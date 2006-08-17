@@ -1,0 +1,312 @@
+=== ORIGIN ===
+
+These are just *Kanes* notes on the 6pan. These are partly in the Brainstorming section too, but since the wiki is not the authoritive source, a seperate page got added.
+
+=== Most recent version here: ===
+    http://p4.elixus.org:8181/@md=d&cd=//member/kane/pms/docs/&cdf=//member/kane/pms/docs/notes.txt&c=BYo@//member/kane/pms/docs/notes.txt?ac=22
+
+=== Steal ideas from Fink ===
+
+    * See Fink::Services->expand_percent for placeholder expansion
+    * See Fink::Engine->cmd_build for building packages
+        * Here, 'apt-get' is used        
+    * See Fink::Validator for checking package correctness
+    * See Fink::PkgVersion->phase_build for building the .deb
+        * See other phase_* methods for fetching, installing, etc
+        * Here, 'dpkg' is used
+    * Custom scripts grabbed from info file to do custom installs:
+        See Fink::PkgVersion->get_script for details (pre & post hooks)
+    
+    * Packaging example: http://fink.sourceforge.net/doc/quick-start-pkg/
+    * Package reference: http://fink.sourceforge.net/doc/packaging/reference.php
+    
+    * Uses dpkg(-.*)? and apt-(.*) applications
+        * Linux/Unix only
+        * Bundle mingw-sys and the like for unix emulation
+        * Added custom patches to install outside standard /etc & friends
+
+=== Fink Choices ===
+
+    * Fink resolves dependencies instead of apt
+        * apt only does resolving on packages already built
+            * fink builds on the fly
+        * apt-get is used for the precompiled packages
+        * fink parses dpkg status files 
+            * dpkg doesn't provide a good interface
+            * static, stable format -- quite fast and reliable
+    * .deb generation from .info files
+        * userfriendly
+        * dpkg got added as backend later
+            * therefor not as 'standard' debian interface
+    * dpkg developers have not accepted patches for dpkg like the @PREFIX@
+        * check debian/fink mailing lists for details
+
+
+=== Environment ===
+
+    * Wrap everything away under perl install tree
+        * Including our custom patched programs (apt,dpkg)
+
+=== Basic flow ===
+
+    * pms-config to set up your own environment
+        * set up for authors
+        * set up for installing
+
+    * pms-start to set up a module directory (a la h2xs)
+        * standard pre/post hooks
+        * metadata file
+            * might be able to use debtags [1]
+        * usual pm, test, etc
+        * steal from module::starter & co
+        * plugin based?
+    
+    * pms-generate to generate the metadata (a la meta.yml)
+        * get this meta data from perl6 compiler
+            * loaded modules, trees, subs, pods, etc
+        * fill in automatically
+        * we can be sure whether we're sure or not
+            * if sure, fixup metadata
+            * if unsure, prompt user
+            
+    * pms-build to generate the package (a la make dist, generate .deb)
+        * requires dpkg & friends 
+        * libapt-front-dev might help to build a pkg manager [2]    
+        * binary packages where possible
+        * source packages only for modules with 'XS code' 
+           
+    * pms-push ? to push modules to PAUSE-a-like 
+        * pause will need to index files (apt-ftp archive)?
+
+    * pms-install? to install from PAUSE again (using apt-get)
+        * local status and package db can be read:
+            * /sw/var/lib/dpkg/status (full .info file)
+            * apt-cache dump (pkg, version, file, depends)
+        * installing requires apt-get & friends        
+            * root dir can be set so dpkg installs proper on every OS
+        * can't use apt-get on source packages 
+            * must write own installer, like fink
+            
+
+=== Known Issues ===
+
+    * Unmet dependencies we can not resolve
+        * Needing foo.h or certain version of perl
+            * proper diagnostics (requires proper probing!) are
+                better than nothing
+
+    * Can not build binary .deb for modules that compile things
+        * compiling will have to happen at client side, which
+            is different than from the pure perl modules
+            * using a src package will fix this, but can not use
+                apt-get to resolve dependencies
+                * will have to do that manually, like fink does
+
+    * Dpkg doesn't allow 2 versions of 1 package to be installed
+        * which perl6 *does* allow
+            * Need to find away around this
+                * version/origin in package name?
+                * See: http://dev.perl.org/perl6/doc/design/syn/S11.html
+                * Provides: might do the trick
+                    * Package name: p5-foo-bar-1.2-cpan+kane
+                    * Provides: p5-foo-bar, p5-foo-bar-cpan+kane
+                * Users can depend on either 'p5-foo-bar' or add origin
+                    * version dependency as per usual
+            * Need to agree on what to do with scripts, docs, etc (anything
+                that's not a module basically)
+                * 2 options:
+                   * install them versioned, just like perl, ie:
+                        $Config{installscript}/script-version-authority
+                    * install them in the module dir, adding an extra layer:
+                        $Config{installsitelib}/package-version-authority/
+                            bin/script
+                        $Config{installsitelib}/package-version-authority/
+                            lib/Foo/Bar.pm
+                * In both cases, we'll need to add scripts to $PATH, and
+                    manpages to $MANPATH. An ln -s of the $(MAN)PATH location
+                    to the specific location will solve the path problem, but
+                    2 problems persist:
+                        * either the ln -s'd file will be part of the 
+                            installed package, at which point it can not also
+                            be in another package
+                        * or the ln -s is set up with a POST.PL hook, leaving
+                            it out of the package, but making the clean up
+                            a lot harder, as we dont keep track of /who/ owns
+                            the file.
+                * it seems that 'update-alternatives' handles this for debian
+                    (this is a perl script)
+                    * see [3]  for the sample control/prerm/postinst file
+                        for elvis-tiny
+
+    * perl6 specifies packages as PACKAGE-VERSION-ORIGIN, where origin is
+        type:value. (see http://dev.perl.org/perl6/doc/design/syn/S11.html).
+        However, : is not a valid symbol in packages, _-+ are, so suggested
+        use will be + over :
+
+    * metadata is used and collected on the client machine, and the
+        accompanying is fetched on demand (the .tgz file). We need to know 
+        where this file is kept. Debian uses a centralized packages file, 
+        which adds an entry called Filename: to point to the file on that
+        mirror. Either we have to add something similar, or be able to 
+        unambiguously derive the file location from the other mandatory
+        meta info
+
+    *** BLOCKING ISSUE ***
+    * admindir *MUST* be under instdir, or this annoying dpkg bug comes in
+        effects (from dpkg-1.13.11:src/help.c:171):
+          /* returns the path to the script inside the chroot
+           * none of the stuff here will work if admindir isn't inside instdir
+           * as expected. - fixme
+           */
+          size_t instdirl;
+        
+          if (*instdir) {
+            if (chroot(instdir)) 
+                ohshite(_("failed to chroot to `%.250s'"),instdir);
+          }
+        * Things get worse -- when using an admindir that is IN instdir,
+            one can either pick by giving an admindir relative to instdir,
+            which will not find the script to be executed, as that is 
+            determined pre-chroot, or fail to execute the script, as it no
+            longer 'exists' after the chroot.
+        * Setting a --root=dir doesn't help either, as a chroot will still
+            be done. even though the script will be *found* to execute, any
+            calls to external utilities (like say, perl) will not be possible,
+            as they are not under the chroot. Pain ensues.
+        * smart-pm and yum have been suggested by vasi (#fink) as possible
+            other candidates to replace dpkg, or at least steal ideas from
+
+=== Script types ===*
+
+    * note, the 'zsh script' are usually perl files...
+
+    [kane@chaos /sw/bin]$ find . -type f | grep 'apt' | xargs file
+    ./apt-cache:            Mach-O executable ppc
+    ./apt-cdrom:            Mach-O executable ppc
+    ./apt-config:           Mach-O executable ppc
+    ./apt-extracttemplates: Mach-O executable ppc
+    ./apt-get:              Mach-O executable ppc
+    ./apt-sortpkgs:         Mach-O executable ppc
+    [kane@chaos /sw/bin]$ find . -type f | grep 'dpkg' | xargs file
+    ./dpkg:                Mach-O executable ppc
+    ./dpkg-architecture:   Paul Falstad's zsh script text executable
+    ./dpkg-buildpackage:   a /bin/sh script text executable
+    ./dpkg-checkbuilddeps: Paul Falstad's zsh script text executable
+    ./dpkg-deb:            Mach-O executable ppc
+    ./dpkg-distaddfile:    Paul Falstad's zsh script text executable
+    ./dpkg-genchanges:     Paul Falstad's zsh script text executable
+    ./dpkg-gencontrol:     Paul Falstad's zsh script text executable
+    ./dpkg-name:           a /bin/sh script text executable
+    ./dpkg-parsechangelog: Paul Falstad's zsh script text executable
+    ./dpkg-query:          Mach-O executable ppc
+    ./dpkg-scanpackages:   Paul Falstad's zsh script text executable
+    ./dpkg-scansources:    Paul Falstad's zsh script text executable
+    ./dpkg-shlibdeps:      Paul Falstad's zsh script text executable
+    ./dpkg-source:         Paul Falstad's zsh script text executable
+    ./dpkg-split:          Mach-O executable ppc
+    [kane@chaos /sw/etc]$ find . -type f
+    ./alternatives/README
+    ./apt/sources.list
+    ./apt/sources.list.finkbak
+    ./dpkg/origins/debian
+    ./dpkg/origins/fink
+    ./dpkg/shlibs.default
+    ./fink.conf
+    ./profile.d/dummy.sh
+    ./wgetrc
+
+
+
+[1] apt-cache show debtags:
+Description: Enables support for package tags
+ debtags provides a system to download a database of package tags and keep
+ it up to date.  A package tag is a small label that gets attached to a
+ Debian package to represent one of his qualities.
+ .
+ A package tag database in the system can enable advanced package search
+ techniques, and advanced package browsing functions in programs that
+ support it.
+ .
+ This package has been made as a way to deploy and test package tags
+ support until it gets integrated in the normal Debian workflow.
+ .
+ For more information, see the Debtags homepage at:
+ http://debtags.alioth.debian.org
+
+
+[2] apt-cache show libapt-front-dev:
+Description: High-level library for managing Debian packages
+ libapt-front is an high-level wrapper for libapt-pkg and libdebtags
+ that makes it easier to develop package-aware applications such as
+ package managers.
+ .
+ libapt-front is a joint effort by the debtags, ept and synaptic
+ teams.
+
+
+[3] alternatives setup for elvis-tiny:
+[kane@codebase2 /tmp]$ cat control
+Package: elvis-tiny
+Version: 1.4-19
+Section: base
+Priority: standard
+Architecture: i386
+Pre-Depends: libc6 (>= 2.3.5-1), libncurses5 (>= 5.4-5)
+Installed-Size: 108
+Maintainer: Debian QA Group <packages@qa.debian.org>
+Description: Tiny vi compatible editor for the base system
+ Elvis-tiny is based on a 1991 Minix version of elvis. You should install
+ another vi-editor (such as "elvis", "nvi" or "vim") if you want a full
+ featured vi editor.
+[kane@codebase2 /tmp]$ cat prerm 
+#! /bin/sh
+
+if [ "$1" = "remove" ]
+then
+        update-alternatives --remove vi     /usr/bin/elvis-tiny
+        update-alternatives --remove vi     /bin/elvis-tiny
+        update-alternatives --remove editor /bin/elvis-tiny
+fi
+
+exit 0
+[kane@codebase2 /tmp]$ cat postinst 
+#! /bin/sh
+
+case "$1" in
+        configure)
+                ;;
+        abort-upgrade|abort-remove|abort-deconfigure)
+                exit 0
+                ;;
+esac
+umask 022
+
+#
+#       elvis-tiny moved from /usr/bin/elvis-tiny to
+#       /bin/elvis-tiny, so adjust symlink if nessecary
+#
+#       We don't need to adjust the 'editor' alternative since
+#       it didn't exist in packages before the move.
+#
+link=
+if [ -L /etc/alternatives/vi ]
+then
+        link=`/bin/ls -ld /etc/alternatives/vi | sed -e 's/^.*-> //'`
+fi
+if [ "$link" = "/usr/bin/elvis-tiny" ]
+then
+        ln -sf /bin/elvis-tiny /etc/alternatives/vi
+        update-alternatives --auto vi
+fi
+
+# Alternative for /usr/bin/vi
+update-alternatives --install /usr/bin/vi vi /bin/elvis-tiny 10 \
+  --slave /usr/share/man/man1/vi.1.gz vi.1.gz \
+        /usr/share/man/man1/elvis-tiny.1.gz
+
+# Alternative for /usr/bin/editor
+update-alternatives --install /usr/bin/editor editor /bin/elvis-tiny 10 \
+  --slave /usr/share/man/man1/editor.1.gz editor.1.gz \
+        /usr/share/man/man1/elvis-tiny.1.gz
+
+[kane@codebase2 /tmp]$  
