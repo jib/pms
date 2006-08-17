@@ -1,0 +1,7 @@
+--- #YAML:1.0
+author: KANE
+depends: Foo
+description: Implements Foo
+name: Foo::Bar
+version: 1.2
+authority: cpan+KANE
