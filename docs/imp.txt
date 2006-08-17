@@ -1,0 +1,163 @@
+== Package dir layout ==
+
+    README
+    _pms/                   # installer specific files
+        PRE.PL              # script to run *pre* install, like makefile.pl
+        POST.PL             # script to run *post* install -- no p5 equiv
+        PRERM.PL            # script to run on uninstall -- no p5 equiv
+        POSTRM.PL           # script to run just after uninstall -- no p5 equiv
+        MANIFEST            # standard manifest file to build dist from
+        p6-foo-bar-ver.info # meta file describing this package 
+                            # meta.yml on steroids
+        
+    lib/                    # standard stuff
+        Foo/
+            Bar.pm
+    bin/                    # standard stuff
+        script.pl
+    t/                      # standard stuff
+        foo.t
+    
+== Files ==    
+
+Names of the files and location can be discussed. This is just a suggestion
+for naming & location. The functionality is the important part.
+
+=== _pms ===
+
+The package build dir, much like debian/ dir in debian packages. Should always
+be included in tarball packages.
+
+=== PRE.PL ===
+
+The file executed before installing a package. In p5 done with makefile.pl.
+Any configuration, probing, etc should go here. Analogous to X.preinst in
+debian terms
+
+These files are amendments to the standard installation process, which provides EU::MM/Module::Build-like functionality, and can and should be empty
+for most installs.
+
+=== POST.PL ===
+    
+The file executed after installing a package. No p5 equivalent. Analogous 
+to X.postinst in debian terms
+
+These files are amendments to the standard installation process, which provides EU::MM/Module::Build-like functionality, and can and should be empty
+for most installs.
+
+=== PRERM.PL ===
+
+The file executed just before removing a package. No p5 equivalent. Analogous 
+to X.prerm in debian terms
+
+These files are amendments to the standard installation process, which provides EU::MM/Module::Build-like functionality, and can and should be empty
+for most installs.
+
+=== POSTRM.PL ===
+
+The file executed just after removing a package. No p5 equivalent. Analogous 
+to X.postrm in debian terms
+
+These files are amendments to the standard installation process, which provides EU::MM/Module::Build-like functionality, and can and should be empty
+for most installs.
+
+=== MANIFEST ===
+
+Analogous to the p5 MANIFEST file (and by proxy, MANIFEST.SKIP). Allows for
+files in the package directory, that will not be packaged along. Not part
+of the package meta-data, as it's not relevant information about the package.
+
+=== p6-foo-bar-ver.info === 
+
+Metadata file. Ideally auto-filled by perl tools, but manually edited.
+Based on a human readable & machine parsable language (YAML?)
+
+All *build* decisions should be taken on the basis of the contents of this file.
+Allow user addition of fields, as this file will have all the metadata on the
+package. There may be more data available than we need to package/build things
+
+Use prefix - package - version syntax for the following reasons:
+* prefix so we can build for multiple targets, like p5, java, etc
+* package - version so every version gets a uniquely named info file.
+    this assumes that files are still being saved on mirrors in their
+    authors directory
+
+Meta data contents and their meaning is described in a different file.
+
+== Packaging ==
+    
+=== Creating a package ==
+
+* Packaging should be done based on the MANIFEST file, creating a tarball
+    with all the manifest files included. This needs a sanity check.
+    Details of this will be described in a different file.
+    
+* Tarball (or pre-tarring) should check sanity of package based on .info
+* Name of the tarball should be analogous to the .info file. So:
+
+    p6-foo-bar-ver.info
+    p6-foo-bar-ver.tgz
+
+=== Uploading a package ===
+
+The tarball will be submitted to a PAUSE like entity, where it's .info file
+is extracted and made available paralell to it's accompanying tarball.
+
+The info file will be either available as seperate downloads of which a cache
+is built locally, or as a collected file, or both. This all depends on what's
+faster and easier to deal with. Bottom line is that the information must be
+available, as it's specifies all the metadata pre fetching the tarball.
+
+== Distributing Files ==
+
+CPAN masters will be responsible for both the metadata, and the souce files
+(ie, the .info files and the .tgz files). These files must be downloadable
+by the installer client. The metadata files will be used to build a local
+queryable database, from which all install decisions will be made.
+
+== Building Distributions ==
+
+A package will be built based on the metadata from the .info file, and the
+tarball that goes with the .info file, which needs to be obtained from one of 
+the mirrors. The lib/ and bin/ directories are the only 2 being installed, and
+a man/ directory will be added for documentation. The package layout will 
+therefor look like this:
+
+    p6-foo-bar-version-origin/
+        lib/
+            Foo/
+                Bar.pm
+        bin/
+            script
+        man/
+            man1/
+                script.1p
+            man3/
+                Foo::Bar.3pm
+
+Prefixed with the core, site or vendor directory, as appropriate. Standard
+installs will go into site. Due to the client-specific install directories, 
+binary packages are not possible. 
+
+== Installing Distributions ==
+
+=== Handling Dependencies ===
+
+Dependencies are listed in the appropriate field in the metadata, which are 
+extracted by the installer during build/install time. Dependencies can be
+'short forms' of full package names, so to see if a package satisfies a dependency, the Provides: section of the possible candidates' metadata must
+be inspected. All packages will Provide prefix - package, and prefix - package 
+- origin, so all dependencies can be listed in that level of granularity as
+well.
+
+=== Installation Areas ===
+
+When installing these distributions, perl will be able to find it's modules,
+but scripts and manpages are no longer in the default search path. Therefor,
+the debian concept of 'alternatives' will be used which will link the 
+appropriate file to a file in the path. This concept *could* be used for 
+modules as well, if we want to give more granularty in choice which is the 
+'default' module, when saying 'use Foo::Bar'
+Which file is the appropriate one will have to be decided still.
+
+== Uninstall Distributions ==
