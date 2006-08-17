@@ -1,0 +1,13 @@
+== Meta fields ==
+
+Name            # full pkg name: prefix-module-ver-origin
+                # long name, so we can install multiple versions (see S11)
+Version         # pkg version
+Author          # pkg author
+Origin          # see S11 - cpan+kane, mailto+Y, http+X 
+                # Default to cpan+$author
+Provides        # prefix-module, prefix-module-origin
+                # so other modules can depend on it
+Depends         # pgks it requires
+Contains        # modules it contains
+Description     # package description                     
