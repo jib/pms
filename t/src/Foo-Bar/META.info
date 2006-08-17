@@ -1,0 +1,9 @@
+Name:           Foo::Bar
+Version:        1.2
+Contains:       Foo::Bar Foo::Bar::Baz
+Depends:        Foo
+Author:         pms@example.com
+Description:    Implementation of the
+ glorious Foo-Bar protocol
+ 
+ 
